@@ -1,0 +1,14 @@
+{
+  "name": "sourcemap-detector",
+  "version": "1.0.0",
+  "description": "Browser extension to detect sourcemap leaks on websites",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "build:firefox": "node build.js firefox",
+    "build:chrome": "node build.js chrome",
+    "package:firefox": "node build.js firefox --package",
+    "package:chrome": "node build.js chrome --package",
+    "clean": "rm -rf dist"
+  }
+}
