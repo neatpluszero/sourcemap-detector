@@ -146,8 +146,12 @@ function buildChrome() {
     path.join(out, 'content', 'content-bundle.js')
   );
 
-  // Copy popup
+  // Copy popup, plus the shared utils it loads
   copyDir(path.join(SRC, 'popup'), path.join(out, 'popup'));
+  copyFile(
+    path.join(SRC, 'shared', 'utils.js'),
+    path.join(out, 'shared', 'utils.js')
+  );
 
   // Copy icons
   copyDir(path.join(SRC, 'icons'), path.join(out, 'icons'));

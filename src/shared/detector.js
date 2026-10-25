@@ -29,8 +29,8 @@ const SourcemapDetector = {
   },
 
   /**
-   * Scan text content for sourceMappingURL directives.
-   * Only checks the last 1KB since sourceMappingURL is always at the end.
+   * Scan text content for a sourceMappingURL directive.
+   * Only the last directive counts, since it is always at the end of a file.
    * @param {string} content - The file content
    * @param {string} resourceUrl - The URL of the resource
    * @param {string} type - 'script' or 'stylesheet'
@@ -40,27 +40,55 @@ const SourcemapDetector = {
     const results = [];
     if (!content) return results;
 
-    // sourceMappingURL is always near the end of a file
-    const tail = content.length > 1024 ? content.slice(-1024) : content;
+    const regex = new RegExp(
+      '^' +
+        (type === 'stylesheet'
+          ? SOURCEMAP_CONSTANTS.CSS_SOURCEMAP_REGEX
+          : SOURCEMAP_CONSTANTS.JS_SOURCEMAP_REGEX
+        ).source
+    );
 
-    const regex =
-      type === 'stylesheet'
-        ? new RegExp(SOURCEMAP_CONSTANTS.CSS_SOURCEMAP_REGEX.source, 'g')
-        : new RegExp(SOURCEMAP_CONSTANTS.JS_SOURCEMAP_REGEX.source, 'g');
+    // Search back from the end for the directive itself rather than scanning
+    // a fixed-size tail: inline data URI maps are often far longer than any
+    // tail window. Try earlier occurrences when a later one isn't a comment,
+    // e.g. sourcemap tooling bundled into the file.
+    let from = content.length;
+    for (let i = 0; i < SOURCEMAP_CONSTANTS.MAX_DIRECTIVE_CANDIDATES; i++) {
+      const index = content.lastIndexOf('sourceMappingURL=', from);
+      if (index === -1) break;
 
-    let match;
-    while ((match = regex.exec(tail)) !== null) {
-      const rawUrl = match[1];
-      const sourcemapUrl = SourcemapUtils.resolveUrl(rawUrl, resourceUrl);
-      results.push({
-        sourcemapUrl,
-        resourceUrl,
-        source: 'comment',
-        type,
-        isDataUri: SourcemapUtils.isDataUri(rawUrl),
-        timestamp: Date.now(),
-      });
+      const commentStart = Math.max(
+        content.lastIndexOf('//', index),
+        content.lastIndexOf('/*', index)
+      );
+      const match =
+        commentStart === -1 ? null : regex.exec(content.slice(commentStart));
+      if (match) {
+        results.push(this.createCommentEntry(match[1], resourceUrl, type));
+        break;
+      }
+
+      if (index === 0) break;
+      from = index - 1;
     }
     return results;
+  },
+
+  createCommentEntry(rawUrl, resourceUrl, type) {
+    const isDataUri = SourcemapUtils.isDataUri(rawUrl);
+    const entry = {
+      // Inline maps can be megabytes long, so keep only the media type prefix
+      sourcemapUrl: isDataUri
+        ? SourcemapUtils.truncateDataUri(rawUrl)
+        : SourcemapUtils.resolveUrl(rawUrl, resourceUrl),
+      resourceUrl,
+      source: 'comment',
+      type,
+      isDataUri,
+      timestamp: Date.now(),
+    };
+    // Inline maps are inspected now, while the payload is still available
+    if (isDataUri) Object.assign(entry, SourcemapUtils.inspectDataUri(rawUrl));
+    return entry;
   },
 };

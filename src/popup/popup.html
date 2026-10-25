@@ -11,6 +11,8 @@
         <span id="count-badge" class="count-badge hidden">0</span>
       </header>
 
+      <nav id="domains" class="domains hidden" aria-label="Domains"></nav>
+
       <div id="status" class="status">
         <p id="status-text">Scanning...</p>
       </div>
@@ -24,11 +26,16 @@
       </div>
 
       <footer id="actions" class="actions hidden">
+        <label class="actions__filter" title="Copy and Export only maps confirmed downloadable">
+          <input type="checkbox" id="only-exposed" checked />
+          Only exposed
+        </label>
         <button id="btn-copy" class="btn btn-primary">Copy All</button>
         <button id="btn-export" class="btn btn-secondary">Export TXT</button>
       </footer>
     </div>
 
+    <script src="../shared/utils.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

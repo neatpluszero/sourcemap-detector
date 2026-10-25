@@ -6,7 +6,7 @@
 
 body {
   width: 420px;
-  max-height: 520px;
+  max-height: 600px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     Helvetica, Arial, sans-serif;
   font-size: 13px;
@@ -17,7 +17,7 @@ body {
 .container {
   display: flex;
   flex-direction: column;
-  max-height: 520px;
+  max-height: 600px;
 }
 
 /* ── Header ── */
@@ -66,7 +66,7 @@ body {
 .results {
   flex: 1;
   overflow-y: auto;
-  max-height: 370px;
+  min-height: 0;
 }
 
 .sourcemap-list {
@@ -133,6 +133,158 @@ body {
   color: #6b46c1;
 }
 
+/* Verification status badges */
+.badge + .badge {
+  margin-left: 4px;
+}
+
+.status--exposed {
+  background: #e53e3e;
+  color: #fff;
+}
+
+.status--safe {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.status--pending {
+  background: #edf2f7;
+  color: #a0aec0;
+}
+
+/* Domain bar */
+.domains {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  max-height: 96px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.domains__caption {
+  flex-basis: 100%;
+  font-size: 10px;
+  color: #718096;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid #cbd5e0;
+  border-radius: 12px;
+  background: #fff;
+  color: #2d3748;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: #a0aec0;
+}
+
+.chip__host {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.chip__count {
+  flex-shrink: 0;
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: #e2e8f0;
+  color: #4a5568;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chip__count--exposed {
+  background: #e53e3e;
+  color: #fff;
+}
+
+.chip--skipped {
+  background: #f7fafc;
+  border-style: dashed;
+  color: #a0aec0;
+}
+
+.chip--skipped .chip__host {
+  text-decoration: line-through;
+}
+
+.chip--skipped .chip__count {
+  background: #edf2f7;
+  color: #a0aec0;
+}
+
+/* Domain groups */
+.group__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 7px 16px 7px 10px;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f1f5f9;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  position: sticky;
+  top: 0;
+}
+
+.group__header:hover {
+  background: #e9eef4;
+}
+
+.group__caret {
+  width: 10px;
+  color: #718096;
+  font-size: 11px;
+}
+
+.group__host {
+  font-weight: 600;
+  font-size: 12px;
+  color: #2d3748;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group__tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: #2b6cb0;
+  background: #ebf8ff;
+  padding: 0 5px;
+  border-radius: 3px;
+}
+
+.group__count {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #718096;
+}
+
+.skipped-note {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: #a0aec0;
+}
+
 /* ── Actions footer ── */
 .actions {
   display: flex;
@@ -169,6 +321,21 @@ body {
 
 .btn-secondary:hover {
   background: #e2e8f0;
+}
+
+.actions__filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #4a5568;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .btn--copied {

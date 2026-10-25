@@ -11,6 +11,7 @@
   },
   "permissions": [
     "webRequest",
+    "webNavigation",
     "activeTab",
     "storage",
     "<all_urls>"
@@ -46,8 +47,11 @@
   ],
   "browser_specific_settings": {
     "gecko": {
-      "id": "sourcemap-detector@example.com",
-      "strict_min_version": "91.0"
+      "id": "sourcemap-detector@neatpluszero",
+      "strict_min_version": "91.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
     }
   }
 }

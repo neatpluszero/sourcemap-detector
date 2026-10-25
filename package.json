@@ -9,6 +9,7 @@
     "build:chrome": "node build.js chrome",
     "package:firefox": "node build.js firefox --package",
     "package:chrome": "node build.js chrome --package",
+    "test": "node --test",
     "clean": "rm -rf dist"
   }
 }
