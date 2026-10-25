@@ -38,4 +38,8 @@ const SOURCEMAP_CONSTANTS = {
 
   // Bound on tracked in-flight requests, in case some never complete
   REQUEST_TRACKING_MAX: 2000,
+
+  // Bounds per tab, which matter when Preserve log keeps results across pages
+  MAX_TAB_ENTRIES: 2000,
+  MAX_SCANNED_URLS: 5000,
 };

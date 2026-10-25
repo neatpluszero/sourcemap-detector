@@ -37,8 +37,18 @@ const SourcemapDetector = {
    * @returns {Array} Detected sourcemap entries
    */
   scanContent(content, resourceUrl, type) {
-    const results = [];
-    if (!content) return results;
+    const rawUrl = this.findDirectiveUrl(content, type);
+    return rawUrl === null
+      ? []
+      : [this.createCommentEntry(rawUrl, resourceUrl, type)];
+  },
+
+  /**
+   * Find the last sourceMappingURL directive in a file.
+   * @returns {string|null} The raw URL, untruncated, or null if there is none
+   */
+  findDirectiveUrl(content, type) {
+    if (!content) return null;
 
     const regex = new RegExp(
       '^' +
@@ -63,15 +73,12 @@ const SourcemapDetector = {
       );
       const match =
         commentStart === -1 ? null : regex.exec(content.slice(commentStart));
-      if (match) {
-        results.push(this.createCommentEntry(match[1], resourceUrl, type));
-        break;
-      }
+      if (match) return match[1];
 
       if (index === 0) break;
       from = index - 1;
     }
-    return results;
+    return null;
   },
 
   createCommentEntry(rawUrl, resourceUrl, type) {

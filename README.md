@@ -17,6 +17,8 @@ A browser extension for Firefox and Chrome that finds JavaScript and CSS sourcem
 - Fetches each referenced map and checks that it is a valid sourcemap
 - Groups results by domain, so third-party scripts can be skipped
 - Copies all map URLs to the clipboard or exports them to a text file
+- Explorer: browse each map's original source files as a tree and download them as a ZIP, with no separate tool needed
+- Preserve log: keep a tab's results when it navigates to another page
 
 ## Statuses
 
@@ -39,8 +41,20 @@ The toolbar badge is red with the number of exposed maps, or grey with the numbe
 - Groups for the current site start expanded, other domains start collapsed. Click a group header to toggle it.
 - With **Only exposed** ticked (the default), Copy All and Export include only maps confirmed downloadable.
 - The count in the header shows how many maps Copy All and Export will include, out of the total found.
+- **Preserve log** keeps each tab's results when it navigates to another page, until the tab is closed. Entries from an earlier page show which page they were found on. **Clear** empties the current tab's results.
+- **Explorer ↗** opens the explorer for the current tab.
 
-Skipped domains and the Only exposed setting are remembered.
+Skipped domains, Only exposed and Preserve log are remembered.
+
+## Explorer
+
+The explorer opens in its own tab and lists the current tab's sourcemaps by domain. Expand a map to download it and browse its original source files as a folder tree; select a file to view, copy or download it. Files the map lists without including their source are shown greyed out.
+
+**ZIP** on a domain or map row, or **Download all as ZIP**, saves the original sources as `<domain>/<map name>/<source path>`. Download all follows the popup's skipped domains and Only exposed setting. Each archive includes an `index.txt` listing every map, its URL, and any files or maps that couldn't be included.
+
+Source paths come from the website, so they are cleaned before use: `webpack://` prefixes become folders, `..` can't leave the map's folder, and characters that aren't valid in file names are replaced.
+
+Maps are downloaded again when you open them, with the same limits as the checks: no cookies, no redirects, nothing on private hosts from public pages. An inline map in a page's own `<script>` can't be opened in the explorer, since only its first characters are kept.
 
 ## Privacy
 
@@ -73,6 +87,7 @@ src/shared/      detection, sourcemap validation and URL helpers
 src/background/  request monitoring, fetching and verification
 src/content/     page scanning for inline blocks and loaded resources
 src/popup/       popup UI
+src/explorer/    explorer page and ZIP export
 manifests/       Firefox (MV2) and Chrome (MV3) manifests
 test/            unit tests (node --test)
 ```

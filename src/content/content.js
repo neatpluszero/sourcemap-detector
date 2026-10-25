@@ -79,6 +79,8 @@
           window.location.href,
           type
         );
+        // Inline blocks can't be fetched again later, e.g. by the explorer
+        for (const entry of entries) entry.inline = true;
         allEntries.push(...entries);
       }
     }

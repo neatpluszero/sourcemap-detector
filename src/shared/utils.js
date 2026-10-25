@@ -61,27 +61,11 @@ const SourcemapUtils = {
    * @returns {object} { status: 'exposed', sourceCount, hasSourcesContent } or { status: 'invalid' }
    */
   inspectSourcemap(text) {
-    let map;
-    try {
-      map = JSON.parse(text.replace(/^\)\]\}'[^\n]*\n/, ''));
-    } catch (e) {
-      return { status: 'invalid' };
-    }
-    if (!map || typeof map !== 'object') return { status: 'invalid' };
-
-    const isMap = (m) =>
-      !!m &&
-      typeof m === 'object' &&
-      Array.isArray(m.sources) &&
-      typeof m.mappings === 'string';
-
-    // Index maps nest regular maps under sections[].map
+    const map = SourcemapUtils.parseSourcemap(text);
+    if (!map) return { status: 'invalid' };
     const maps = Array.isArray(map.sections)
-      ? map.sections.map((s) => s && s.map).filter(Boolean)
+      ? map.sections.map((s) => s.map)
       : [map];
-    if (maps.length === 0 || !maps.every(isMap)) {
-      return { status: 'invalid' };
-    }
 
     let sourceCount = 0;
     let hasSourcesContent = false;
@@ -95,6 +79,65 @@ const SourcemapUtils = {
   },
 
   /**
+   * Parse a sourcemap body.
+   * @returns {object|null} The parsed map, or null if it isn't a valid sourcemap
+   */
+  parseSourcemap(text) {
+    let map;
+    try {
+      map = JSON.parse(text.replace(/^\)\]\}'[^\n]*\n/, ''));
+    } catch (e) {
+      return null;
+    }
+    if (!map || typeof map !== 'object') return null;
+
+    const isMap = (m) =>
+      !!m &&
+      typeof m === 'object' &&
+      Array.isArray(m.sources) &&
+      typeof m.mappings === 'string';
+
+    // Index maps nest regular maps under sections[].map
+    if (Array.isArray(map.sections)) {
+      return map.sections.length > 0 &&
+        map.sections.every((s) => s && isMap(s.map))
+        ? map
+        : null;
+    }
+    return isMap(map) ? map : null;
+  },
+
+  /**
+   * Label and style class for an entry's verification status.
+   * @returns {object} { className, text }
+   */
+  statusBadge(entry) {
+    switch (entry.status) {
+      case 'exposed': {
+        let text =
+          (entry.isDataUri ? 'Embedded · ' : 'Exposed · ') +
+          entry.sourceCount + ' sources';
+        if (entry.hasSourcesContent) text += ' + code';
+        return { className: 'status--exposed', text };
+      }
+      case 'unreachable':
+        return { className: 'status--safe', text: 'HTTP ' + entry.httpStatus };
+      case 'invalid':
+        return { className: 'status--safe', text: 'Not a sourcemap' };
+      case 'redirect':
+        return { className: 'status--safe', text: 'Redirects (not followed)' };
+      case 'toolarge':
+        return { className: 'status--safe', text: 'Too large to check' };
+      case 'skipped':
+        return { className: 'status--pending', text: 'Not checked (private host)' };
+      case 'error':
+        return { className: 'status--safe', text: 'Fetch failed' };
+      default:
+        return { className: 'status--pending', text: 'Checking…' };
+    }
+  },
+
+  /**
    * Decode and inspect an inline data URI sourcemap.
    * @returns {object} inspectSourcemap result plus dataUriLength and dataUriHash
    */
@@ -103,21 +146,130 @@ const SourcemapUtils = {
       dataUriLength: url.length,
       dataUriHash: SourcemapUtils.hash(url),
     };
-    const comma = url.indexOf(',');
-    let text = null;
-    if (comma !== -1) {
-      const meta = url.slice(5, comma);
-      const payload = url.slice(comma + 1);
-      try {
-        text = /;base64$/i.test(meta)
-          ? atob(payload)
-          : decodeURIComponent(payload);
-      } catch (e) {}
-    }
+    const text = SourcemapUtils.decodeDataUri(url);
     return Object.assign(
       info,
       text === null ? { status: 'invalid' } : SourcemapUtils.inspectSourcemap(text)
     );
+  },
+
+  /**
+   * Text of a base64 or percent-encoded data URI, or null if it can't be decoded.
+   */
+  decodeDataUri(url) {
+    const comma = url.indexOf(',');
+    if (comma === -1) return null;
+    const meta = url.slice(5, comma);
+    const payload = url.slice(comma + 1);
+    try {
+      if (!/;base64$/i.test(meta)) return decodeURIComponent(payload);
+      // atob gives one character per byte; decode those bytes as UTF-8
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new TextDecoder().decode(bytes);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /**
+   * The original source files in a parsed sourcemap, including those nested
+   * in an index map's sections.
+   * @returns {Array} [{ source, path, content }] where path is safe to use as
+   *   a file path and content is null when the map doesn't include it
+   */
+  listSources(map) {
+    const maps = Array.isArray(map.sections)
+      ? map.sections.map((s) => s && s.map).filter(Boolean)
+      : [map];
+    const files = [];
+    for (const m of maps) {
+      if (!Array.isArray(m.sources)) continue;
+      const root = typeof m.sourceRoot === 'string' ? m.sourceRoot : '';
+      const contents = Array.isArray(m.sourcesContent) ? m.sourcesContent : [];
+      m.sources.forEach((source, i) => {
+        if (typeof source !== 'string' || source === '') return;
+        // sourceRoot applies only to relative sources
+        const full =
+          root && !/^[a-z][a-z0-9+.-]*:/i.test(source) && !source.startsWith('/')
+            ? root.replace(/\/?$/, '/') + source
+            : source;
+        const content = contents[i];
+        files.push({
+          source: full,
+          path: SourcemapUtils.sanitizeSourcePath(full),
+          content: typeof content === 'string' ? content : null,
+        });
+      });
+    }
+    return files;
+  },
+
+  /**
+   * Turn a source path from a sourcemap into a relative file path that can't
+   * escape its folder, e.g. "webpack://app/./src/../a.vue?4c2f" becomes
+   * "webpack/app/a.vue". Sourcemaps come from untrusted sites.
+   */
+  sanitizeSourcePath(source) {
+    const path = String(source || '')
+      // Keep the scheme as a folder: webpack://app/x -> webpack/app/x
+      .replace(/^([a-z][a-z0-9+.-]*):\/*/i, '$1/')
+      // Webpack appends ?hash to some module ids
+      .replace(/[?#].*$/, '');
+
+    const parts = [];
+    for (const raw of path.split(/[\\/]+/)) {
+      if (raw === '' || raw === '.') continue;
+      if (raw === '..') {
+        parts.pop();
+        continue;
+      }
+      const part = raw
+        .replace(/[<>:"|?*\x00-\x1f\x7f]/g, '_')
+        // Windows drops trailing dots and spaces from names
+        .replace(/[. ]+$/, '')
+        .slice(0, 200);
+      if (part) parts.push(part);
+    }
+    return parts.length ? parts.join('/') : 'unnamed';
+  },
+
+  /**
+   * Fetch a URL without cookies and read it as text, stopping at maxBytes.
+   * Aborts the controller to stop an oversized download.
+   * @returns {Promise<object>} { response, text }; text is null when the
+   *   response isn't OK or exceeds maxBytes
+   */
+  async fetchLimited(url, init, maxBytes, controller) {
+    const response = await fetch(url, {
+      ...init,
+      credentials: 'omit',
+      signal: controller.signal,
+    });
+    if (!response.ok) return { response, text: null };
+
+    const declared = Number(response.headers.get('content-length'));
+    if (declared > maxBytes) {
+      controller.abort();
+      return { response, text: null };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    let bytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > maxBytes) {
+        controller.abort();
+        return { response, text: null };
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return { response, text: text + decoder.decode() };
   },
 
   /**

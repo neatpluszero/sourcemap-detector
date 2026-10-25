@@ -8,12 +8,12 @@ const vm = require('vm');
 
 // The shared modules are plain scripts declaring globals, as loaded by the
 // extension, so evaluate them together and pull the objects out.
-const source = ['constants.js', 'utils.js', 'detector.js']
+const source = ['constants.js', 'utils.js', 'detector.js', 'zip.js']
   .map((f) => fs.readFileSync(path.join(__dirname, '..', 'src', 'shared', f), 'utf-8'))
   .join('\n');
-const { SourcemapDetector, SourcemapUtils } = vm.runInNewContext(
-  source + '\n({ SourcemapDetector, SourcemapUtils });',
-  { URL, atob }
+const { SourcemapDetector, SourcemapUtils, SourceZip } = vm.runInNewContext(
+  source + '\n({ SourcemapDetector, SourcemapUtils, SourceZip });',
+  { URL, atob, TextDecoder, TextEncoder, Blob, Response, CompressionStream }
 );
 
 // Objects from the vm context have a different Object prototype
@@ -208,4 +208,122 @@ test('groupByHost puts the page site first, then larger groups', () => {
       ['resources.digital-cloud.medallia.eu', false, 2],
     ]
   );
+});
+
+test('findDirectiveUrl returns the full inline map', () => {
+  const uri = dataUri({ ...MAP, sourcesContent: ['x'.repeat(5000), null] });
+  const content = 'var a;\n//# sourceMappingURL=' + uri + '\n';
+  assert.strictEqual(SourcemapDetector.findDirectiveUrl(content, 'script'), uri);
+  assert.strictEqual(SourcemapDetector.findDirectiveUrl('var a;', 'script'), null);
+});
+
+test('decodeDataUri handles UTF-8 base64 and percent-encoding', () => {
+  const text = '{"a":"héllo ✓"}';
+  const b64 = 'data:application/json;base64,' + Buffer.from(text).toString('base64');
+  assert.strictEqual(SourcemapUtils.decodeDataUri(b64), text);
+  assert.strictEqual(
+    SourcemapUtils.decodeDataUri('data:application/json,' + encodeURIComponent(text)),
+    text
+  );
+  assert.strictEqual(SourcemapUtils.decodeDataUri('data:application/json;base64,%%%'), null);
+});
+
+test('sanitizeSourcePath keeps paths inside the export folder', () => {
+  const cases = {
+    'webpack://app/./src/index.ts': 'webpack/app/src/index.ts',
+    'webpack:///src/App.vue?4c2f': 'webpack/src/App.vue',
+    '../../../etc/passwd': 'etc/passwd',
+    'src/../../secret.js': 'secret.js',
+    '/abs/path.js': 'abs/path.js',
+    'C:\\Users\\dev\\a.js': 'C/Users/dev/a.js',
+    'https://cdn.example.com/lib/x.js': 'https/cdn.example.com/lib/x.js',
+    'a/b<c>|d.js': 'a/b_c__d.js',
+    'dir. /file.js': 'dir/file.js',
+    '': 'unnamed',
+    '..': 'unnamed',
+  };
+  for (const [input, expected] of Object.entries(cases)) {
+    assert.strictEqual(SourcemapUtils.sanitizeSourcePath(input), expected, input);
+  }
+});
+
+test('listSources applies sourceRoot, reads index maps, tolerates short sourcesContent', () => {
+  const files = plain(SourcemapUtils.listSources({
+    sections: [
+      { offset: { line: 0, column: 0 }, map: {
+        version: 3, sourceRoot: 'webpack://app', sources: ['src/a.ts', 'webpack://other/b.ts', null, 'c.ts'],
+        sourcesContent: ['A', null], mappings: '',
+      } },
+      { offset: { line: 1, column: 0 }, map: { version: 3, sources: ['d.css'], mappings: '' } },
+    ],
+  }));
+  assert.deepStrictEqual(files, [
+    { source: 'webpack://app/src/a.ts', path: 'webpack/app/src/a.ts', content: 'A' },
+    { source: 'webpack://other/b.ts', path: 'webpack/other/b.ts', content: null },
+    { source: 'webpack://app/c.ts', path: 'webpack/app/c.ts', content: null },
+    { source: 'd.css', path: 'd.css', content: null },
+  ]);
+});
+
+test('parseSourcemap accepts maps and rejects other JSON', () => {
+  assert.ok(SourcemapUtils.parseSourcemap(")]}'\n" + JSON.stringify(MAP)));
+  assert.strictEqual(SourcemapUtils.parseSourcemap('{"sources":[]}'), null);
+  assert.strictEqual(SourcemapUtils.parseSourcemap('<html>'), null);
+});
+
+test('SourceZip crc32 matches the standard check value', () => {
+  assert.strictEqual(
+    SourceZip.crc32(new TextEncoder().encode('123456789')).toString(16),
+    'cbf43926'
+  );
+});
+
+/**
+ * Read a ZIP's central directory and inflate each file, as an unzip tool would.
+ */
+async function readZip(buffer) {
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const end = buffer.length - 22;
+  assert.strictEqual(view.getUint32(end, true), 0x06054b50);
+  const count = view.getUint16(end + 10, true);
+  let p = view.getUint32(end + 16, true);
+  const files = {};
+  for (let i = 0; i < count; i++) {
+    assert.strictEqual(view.getUint32(p, true), 0x02014b50);
+    const method = view.getUint16(p + 10, true);
+    const crc = view.getUint32(p + 16, true);
+    const compressedSize = view.getUint32(p + 20, true);
+    const size = view.getUint32(p + 24, true);
+    const nameLength = view.getUint16(p + 28, true);
+    const offset = view.getUint32(p + 42, true);
+    const name = buffer.subarray(p + 46, p + 46 + nameLength).toString('utf-8');
+    assert.strictEqual(view.getUint32(offset, true), 0x04034b50);
+    const dataStart = offset + 30 + view.getUint16(offset + 26, true);
+    const raw = buffer.subarray(dataStart, dataStart + compressedSize);
+    const data = method === 8 ? require('zlib').inflateRawSync(raw) : raw;
+    assert.strictEqual(data.length, size, name);
+    assert.strictEqual(SourceZip.crc32(data), crc, name);
+    files[name] = { method, text: data.toString('utf-8') };
+    p += 46 + nameLength;
+  }
+  return files;
+}
+
+test('SourceZip writes a valid archive with deflated, stored and duplicate files', async () => {
+  const zip = SourceZip.writer(new Date(2026, 9, 25, 12, 30, 10));
+  await zip.add('host/app.js.map/src/a.ts', 'export const a = 1;\n'.repeat(200));
+  await zip.add('host/app.js.map/src/a.ts', 'second');
+  await zip.add('host/ünï.txt', 'x');
+  const buffer = Buffer.from(await zip.finish().arrayBuffer());
+  const files = await readZip(buffer);
+  assert.deepStrictEqual(Object.keys(files), [
+    'host/app.js.map/src/a.ts',
+    'host/app.js.map/src/a~2.ts',
+    'host/ünï.txt',
+  ]);
+  assert.strictEqual(files['host/app.js.map/src/a.ts'].method, 8);
+  assert.strictEqual(files['host/app.js.map/src/a.ts'].text, 'export const a = 1;\n'.repeat(200));
+  assert.strictEqual(files['host/app.js.map/src/a~2.ts'].text, 'second');
+  // Too small to gain from compression, so stored
+  assert.strictEqual(files['host/ünï.txt'].method, 0);
 });

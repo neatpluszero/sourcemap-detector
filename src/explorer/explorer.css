@@ -1,0 +1,299 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #1a1a2e;
+  background: #fff;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.topbar__title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar__page {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #718096;
+  font-size: 12px;
+}
+
+.topbar__progress {
+  color: #4a5568;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Buttons ── */
+.btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: #3182ce;
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2c5282;
+}
+
+.btn-small {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #edf2f7;
+  color: #2d3748;
+  font-size: 12px;
+}
+
+.btn-small:hover {
+  background: #e2e8f0;
+}
+
+/* ── Layout ── */
+.layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.tree {
+  width: 380px;
+  min-width: 240px;
+  max-width: 60%;
+  resize: horizontal;
+  overflow: auto;
+  border-right: 1px solid #e2e8f0;
+  padding: 4px 0;
+}
+
+.viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── Tree ── */
+.tree ul {
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 8px 3px calc(8px + var(--depth, 0) * 14px);
+  border: none;
+  background: none;
+  color: #2d3748;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: #f1f5f9;
+}
+
+.row--selected,
+.row--selected:hover {
+  background: #ebf8ff;
+}
+
+.row--dim {
+  opacity: 0.55;
+}
+
+.row__caret {
+  flex-shrink: 0;
+  width: 10px;
+  color: #718096;
+  font-size: 11px;
+}
+
+.row__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row--domain .row__name {
+  font-weight: 600;
+}
+
+.row--file .row__name {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+}
+
+.row--missing .row__name {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.row__meta {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #a0aec0;
+  font-size: 11px;
+}
+
+.row__error {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #c53030;
+  font-size: 11px;
+}
+
+.row__zip {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border: none;
+  border-radius: 6px;
+  background: #3182ce;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  visibility: hidden;
+}
+
+.row__zip:hover {
+  background: #2c5282;
+}
+
+.row:hover .row__zip,
+.row:focus-within .row__zip {
+  visibility: visible;
+}
+
+.tag {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.tag--site {
+  background: #ebf8ff;
+  color: #2b6cb0;
+}
+
+.tag--skipped {
+  background: #edf2f7;
+  color: #718096;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.status--exposed {
+  background: #e53e3e;
+  color: #fff;
+}
+
+.status--safe {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.status--pending {
+  background: #edf2f7;
+  color: #a0aec0;
+}
+
+.tree__empty {
+  padding: 16px;
+  color: #a0aec0;
+}
+
+/* ── Viewer ── */
+.viewer__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.viewer__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+}
+
+.viewer__size {
+  color: #718096;
+  font-size: 12px;
+}
+
+.viewer__code {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  tab-size: 2;
+}
+
+.viewer__empty {
+  padding: 24px;
+  color: #a0aec0;
+}
+
+.hidden {
+  display: none !important;
+}

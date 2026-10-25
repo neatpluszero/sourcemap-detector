@@ -48,6 +48,8 @@ const BackgroundController = {
     this.api = api;
     this.opts = opts;
     this.badgeApi = api[opts.badgeApi];
+    // Keep a tab's results when it navigates, like DevTools' "Preserve log"
+    this.preserveLog = false;
 
     // Every handler waits for this, so a restarted service worker never
     // answers or mutates state before session storage has been restored
@@ -106,6 +108,12 @@ const BackgroundController = {
       );
     });
 
+    api.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes.preserveLog) {
+        this.preserveLog = changes.preserveLog.newValue === true;
+      }
+    });
+
     // Clean up on tab close. Bumping the generation (rather than deleting it)
     // makes any work still in flight for the tab drop its results.
     api.tabs.onRemoved.addListener((tabId) => {
@@ -123,6 +131,11 @@ const BackgroundController = {
    * Rehydrate tabData from session storage after a service worker restart.
    */
   async restore() {
+    try {
+      const settings = await this.api.storage.local.get('preserveLog');
+      this.preserveLog = settings.preserveLog === true;
+    } catch (e) {}
+
     if (!this.opts.useSessionStorage || !this.api.storage?.session) return;
     try {
       const items = await this.api.storage.session.get(null);
@@ -184,6 +197,7 @@ const BackgroundController = {
     if (!SourcemapUtils.canFetch(url, tabData[tabId]?.url)) return;
     const scanned = (scannedUrls[tabId] ??= new Set());
     if (scanned.has(url)) return;
+    if (scanned.size >= SOURCEMAP_CONSTANTS.MAX_SCANNED_URLS) scanned.clear();
     scanned.add(url);
 
     let entries = [];
@@ -233,6 +247,12 @@ const BackgroundController = {
         }
         break;
       }
+      case 'CLEAR_TAB': {
+        if (tabData[message.tabId]) tabData[message.tabId].entries = [];
+        delete scannedUrls[message.tabId];
+        this.onTabChanged(message.tabId);
+        break;
+      }
       case 'GET_TAB_DATA': {
         const data = tabData[message.tabId] || { url: '', entries: [] };
         sendResponse(data);
@@ -259,11 +279,18 @@ const BackgroundController = {
   },
 
   resetTab(tabId, url, documentId) {
+    // Work still running for the previous page is dropped either way, so
+    // results are never attributed to the wrong page
     tabGeneration[tabId] = this.generationOf(tabId) + 1;
-    tabData[tabId] = { url: url || '', entries: [] };
     if (documentId) tabDocumentId[tabId] = documentId;
     else delete tabDocumentId[tabId];
-    delete scannedUrls[tabId];
+
+    if (this.preserveLog && tabData[tabId]) {
+      tabData[tabId].url = url || '';
+    } else {
+      tabData[tabId] = { url: url || '', entries: [] };
+      delete scannedUrls[tabId];
+    }
     this.onTabChanged(tabId);
   },
 
@@ -273,11 +300,13 @@ const BackgroundController = {
     }
     const data = tabData[tabId];
     const previousCount = data.entries.length;
+    // Remember which page each map was found on, as Preserve log mixes pages
+    for (const entry of newEntries) entry.pageUrl = data.url;
     // Deduplication keeps first occurrences in order, so new entries end up last
     data.entries = SourcemapUtils.deduplicateEntries([
       ...data.entries,
       ...newEntries,
-    ]);
+    ]).slice(0, SOURCEMAP_CONSTANTS.MAX_TAB_ENTRIES);
 
     for (const entry of data.entries.slice(previousCount)) {
       this.verifyEntry(tabId, entry);
@@ -295,20 +324,18 @@ const BackgroundController = {
       entry.status = entry.status || 'invalid';
       return;
     }
-    if (!SourcemapUtils.canFetch(entry.sourcemapUrl, tabData[tabId]?.url)) {
+    const pageUrl = entry.pageUrl || tabData[tabId]?.url;
+    if (!SourcemapUtils.canFetch(entry.sourcemapUrl, pageUrl)) {
       entry.status = 'skipped';
       return;
     }
     entry.status = 'pending';
 
-    const generation = this.generationOf(tabId);
     const result = await this.checkSourcemap(entry.sourcemapUrl);
     Object.assign(entry, result);
 
-    if (
-      generation === this.generationOf(tabId) &&
-      tabData[tabId]?.entries.includes(entry)
-    ) {
+    // A navigation replaces the entries array unless Preserve log keeps it
+    if (tabData[tabId]?.entries.includes(entry)) {
       this.onTabChanged(tabId);
     }
   },
@@ -369,34 +396,7 @@ const BackgroundController = {
       SOURCEMAP_CONSTANTS.FETCH_TIMEOUT_MS
     );
     try {
-      const response = await fetch(url, {
-        ...init,
-        credentials: 'omit',
-        signal: controller.signal,
-      });
-      if (!response.ok) return { response, text: null };
-
-      const declared = Number(response.headers.get('content-length'));
-      if (declared > maxBytes) {
-        controller.abort();
-        return { response, text: null };
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let text = '';
-      let bytes = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        bytes += value.byteLength;
-        if (bytes > maxBytes) {
-          controller.abort();
-          return { response, text: null };
-        }
-        text += decoder.decode(value, { stream: true });
-      }
-      return { response, text: text + decoder.decode() };
+      return await SourcemapUtils.fetchLimited(url, init, maxBytes, controller);
     } finally {
       clearTimeout(timer);
       // Cancels any unread body (e.g. of an error response) before the slot

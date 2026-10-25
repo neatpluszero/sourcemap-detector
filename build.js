@@ -105,8 +105,9 @@ function buildFirefox() {
     path.join(out, 'content', 'content.js')
   );
 
-  // Copy popup
+  // Copy popup and explorer
   copyDir(path.join(SRC, 'popup'), path.join(out, 'popup'));
+  copyDir(path.join(SRC, 'explorer'), path.join(out, 'explorer'));
 
   // Copy icons
   copyDir(path.join(SRC, 'icons'), path.join(out, 'icons'));
@@ -146,12 +147,12 @@ function buildChrome() {
     path.join(out, 'content', 'content-bundle.js')
   );
 
-  // Copy popup, plus the shared utils it loads
+  // Copy popup and explorer, plus the shared modules they load
   copyDir(path.join(SRC, 'popup'), path.join(out, 'popup'));
-  copyFile(
-    path.join(SRC, 'shared', 'utils.js'),
-    path.join(out, 'shared', 'utils.js')
-  );
+  copyDir(path.join(SRC, 'explorer'), path.join(out, 'explorer'));
+  for (const file of [...SHARED_MODULES, 'src/shared/zip.js']) {
+    copyFile(path.join(ROOT, file), path.join(out, 'shared', path.basename(file)));
+  }
 
   // Copy icons
   copyDir(path.join(SRC, 'icons'), path.join(out, 'icons'));

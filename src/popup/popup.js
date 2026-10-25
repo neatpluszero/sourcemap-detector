@@ -15,6 +15,9 @@
     btnExport: document.getElementById('btn-export'),
     onlyExposed: document.getElementById('only-exposed'),
     domains: document.getElementById('domains'),
+    preserveLog: document.getElementById('preserve-log'),
+    btnClear: document.getElementById('btn-clear'),
+    btnExplorer: document.getElementById('btn-explorer'),
   };
 
   let cachedData = null;
@@ -42,32 +45,6 @@
 
   // ── Rendering ──
 
-  function getStatusBadge(entry) {
-    switch (entry.status) {
-      case 'exposed': {
-        let text =
-          (entry.isDataUri ? 'Embedded · ' : 'Exposed · ') +
-          entry.sourceCount + ' sources';
-        if (entry.hasSourcesContent) text += ' + code';
-        return { className: 'status--exposed', text };
-      }
-      case 'unreachable':
-        return { className: 'status--safe', text: 'HTTP ' + entry.httpStatus };
-      case 'invalid':
-        return { className: 'status--safe', text: 'Not a sourcemap' };
-      case 'redirect':
-        return { className: 'status--safe', text: 'Redirects (not followed)' };
-      case 'toolarge':
-        return { className: 'status--safe', text: 'Too large to check' };
-      case 'skipped':
-        return { className: 'status--pending', text: 'Not checked (private host)' };
-      case 'error':
-        return { className: 'status--safe', text: 'Fetch failed' };
-      default:
-        return { className: 'status--pending', text: 'Checking…' };
-    }
-  }
-
   function renderEntry(entry) {
     const li = document.createElement('li');
     li.className = 'sourcemap-item';
@@ -94,7 +71,7 @@
     badgeEl.className = badgeClass;
     badgeEl.textContent = badgeText;
 
-    const status = getStatusBadge(entry);
+    const status = SourcemapUtils.statusBadge(entry);
     const statusEl = document.createElement('span');
     statusEl.className = 'badge ' + status.className;
     statusEl.textContent = status.text;
@@ -111,12 +88,30 @@
     const metaEl = document.createElement('div');
     metaEl.className = 'sourcemap-item__meta';
     metaEl.textContent = 'from: ' + resourceLabel;
+    // Preserved results from an earlier page in this tab
+    const otherPage = otherPageOf(entry);
+    if (otherPage) metaEl.textContent += ' · on: ' + otherPage;
 
     li.appendChild(badgeEl);
     li.appendChild(statusEl);
     li.appendChild(urlEl);
     li.appendChild(metaEl);
     return li;
+  }
+
+  /**
+   * The page an entry was found on, when that isn't the current page.
+   */
+  function otherPageOf(entry) {
+    if (!entry.pageUrl || !cachedData || entry.pageUrl === cachedData.url) {
+      return '';
+    }
+    try {
+      const page = new URL(entry.pageUrl);
+      return page.host + page.pathname;
+    } catch (e) {
+      return entry.pageUrl;
+    }
   }
 
   function formatSize(length) {
@@ -289,9 +284,14 @@
 
   async function loadSettings() {
     try {
-      const stored = await api.storage.local.get(['skippedHosts', 'onlyExposed']);
+      const stored = await api.storage.local.get([
+        'skippedHosts',
+        'onlyExposed',
+        'preserveLog',
+      ]);
       skippedHosts = new Set(stored.skippedHosts || []);
       el.onlyExposed.checked = stored.onlyExposed !== false;
+      el.preserveLog.checked = stored.preserveLog === true;
     } catch (e) {}
   }
 
@@ -375,8 +375,9 @@
         const url = e.isDataUri ? '[inline-data-uri]' : e.sourcemapUrl;
         return (
           source + ' ' + url +
-          '\n  Status: ' + getStatusBadge(e).text +
-          '\n  Resource: ' + e.resourceUrl
+          '\n  Status: ' + SourcemapUtils.statusBadge(e).text +
+          '\n  Resource: ' + e.resourceUrl +
+          (otherPageOf(e) ? '\n  Page: ' + e.pageUrl : '')
         );
       })
       .join('\n\n');
@@ -395,6 +396,30 @@
     a.click();
     // Revoking straight away can cancel the download in Firefox
     setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  });
+
+  // ── Toolbar ──
+
+  el.preserveLog.addEventListener('change', () => {
+    try {
+      const saved = api.storage.local.set({ preserveLog: el.preserveLog.checked });
+      if (saved && saved.catch) saved.catch(() => {});
+    } catch (e) {}
+  });
+
+  el.btnClear.addEventListener('click', async () => {
+    if (!currentTab) return;
+    await api.runtime.sendMessage({ type: 'CLEAR_TAB', tabId: currentTab.id });
+    if (cachedData) cachedData.entries = [];
+    renderResults(cachedData);
+  });
+
+  el.btnExplorer.addEventListener('click', async () => {
+    if (!currentTab) return;
+    await api.tabs.create({
+      url: api.runtime.getURL('explorer/explorer.html?tab=' + currentTab.id),
+    });
+    window.close();
   });
 
   // ── Live updates ──

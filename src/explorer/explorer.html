@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sourcemap Explorer</title>
+    <link rel="stylesheet" href="explorer.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1 class="topbar__title">{..} Sourcemap Explorer</h1>
+      <span id="page" class="topbar__page"></span>
+      <span id="progress" class="topbar__progress" role="status"></span>
+      <button id="zip-all" class="btn btn-primary" disabled>Download all as ZIP</button>
+    </header>
+
+    <main class="layout">
+      <nav id="tree" class="tree" aria-label="Sourcemaps and source files"></nav>
+
+      <section class="viewer">
+        <div id="viewer-head" class="viewer__head hidden">
+          <span id="viewer-path" class="viewer__path"></span>
+          <span id="viewer-size" class="viewer__size"></span>
+          <button id="file-copy" class="btn btn-small">Copy</button>
+          <button id="file-download" class="btn btn-small">Download</button>
+        </div>
+        <pre id="viewer-code" class="viewer__code hidden"></pre>
+        <p id="viewer-empty" class="viewer__empty">
+          Expand a sourcemap on the left to load it, then select a file.
+        </p>
+      </section>
+    </main>
+
+    <script src="../shared/constants.js"></script>
+    <script src="../shared/utils.js"></script>
+    <script src="../shared/detector.js"></script>
+    <script src="../shared/zip.js"></script>
+    <script src="explorer.js"></script>
+  </body>
+</html>

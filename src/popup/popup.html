@@ -11,6 +11,15 @@
         <span id="count-badge" class="count-badge hidden">0</span>
       </header>
 
+      <div class="toolbar">
+        <label class="toolbar__toggle" title="Keep each tab's results when it navigates to another page, until the tab is closed">
+          <input type="checkbox" id="preserve-log" />
+          Preserve log
+        </label>
+        <button id="btn-clear" class="toolbar__btn" title="Clear this tab's results">Clear</button>
+        <button id="btn-explorer" class="toolbar__btn toolbar__btn--primary" title="Browse the original source files and download them as a ZIP">Explorer ↗</button>
+      </div>
+
       <nav id="domains" class="domains hidden" aria-label="Domains"></nav>
 
       <div id="status" class="status">
