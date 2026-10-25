@@ -4,6 +4,11 @@ A browser extension for Firefox and Chrome that finds JavaScript and CSS sourcem
 
 ![Screenshot](screenshot.png)
 
+## Install
+
+- **Firefox:** [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/sourcemap-detector/)
+- **Chrome:** [Chrome Web Store](https://chromewebstore.google.com/detail/hnpmmdmhodhmenohiloleboobgcjikja)
+
 ## Features
 
 - Detects `SourceMap` / `X-SourceMap` response headers on scripts and stylesheets
