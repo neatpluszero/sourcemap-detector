@@ -33,11 +33,11 @@ A browser extension for Firefox and Chrome that finds JavaScript and CSS sourcem
 | Not checked (private host) | The map is on localhost or a private network address but the page isn't, so it isn't fetched |
 | Too large to check | Over 30 MB |
 
-The toolbar badge is red with the number of exposed maps, or grey with the number of references when none are confirmed.
+The toolbar badge is red with the number of exposed maps, or grey with the number of references when none are confirmed. Skipped domains don't count.
 
 ## Using the popup
 
-- The domain bar at the top lists every domain that references a sourcemap, with its count. Click a domain to skip it, and click it again to include it. Skipped domains are hidden from the list and left out of Copy All and Export on every site.
+- The domain bar at the top lists every domain that references a sourcemap, with its count. Click a domain to skip it, and click it again to include it. The **\*** button beside a subdomain skips its whole domain, such as everything under `medallia.eu`; hover it to see which domain that is. Skipped domains are hidden from the list and left out of the badge, Copy All and Export on every site.
 - Groups for the current site start expanded, other domains start collapsed. Click a group header to toggle it.
 - With **Only exposed** ticked (the default), Copy All and Export include only maps confirmed downloadable.
 - The count in the header shows how many maps Copy All and Export will include, out of the total found.
@@ -54,7 +54,7 @@ The explorer opens in its own tab and lists the current tab's sourcemaps by doma
 
 Source paths come from the website, so they are cleaned before use: `webpack://` prefixes become folders, `..` can't leave the map's folder, and characters that aren't valid in file names are replaced.
 
-Maps are downloaded again when you open them, with the same limits as the checks: no cookies, no redirects, nothing on private hosts from public pages. An inline map in a page's own `<script>` can't be opened in the explorer, since only its first characters are kept.
+Maps are downloaded again when you open them, with the same limits as the checks: no cookies, no redirects, nothing on private hosts from public pages. A map inline in a page's own `<script>` or `<style>` is read back from the open page, so it can only be opened while that page is still loaded in the tab.
 
 ## Privacy
 

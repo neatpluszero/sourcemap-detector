@@ -327,3 +327,45 @@ test('SourceZip writes a valid archive with deflated, stored and duplicate files
   // Too small to gain from compression, so stored
   assert.strictEqual(files['host/ünï.txt'].method, 0);
 });
+
+test('isHostSkipped matches exact hosts and wildcard rules', () => {
+  const rules = new Set(['tracker.example.com', '*.medallia.eu']);
+  assert.ok(SourcemapUtils.isHostSkipped('tracker.example.com', rules));
+  assert.ok(!SourcemapUtils.isHostSkipped('www.example.com', rules));
+  assert.ok(!SourcemapUtils.isHostSkipped('a.tracker.example.com', rules));
+  assert.ok(SourcemapUtils.isHostSkipped('resources.digital-cloud.medallia.eu', rules));
+  assert.ok(SourcemapUtils.isHostSkipped('medallia.eu', rules));
+  assert.ok(!SourcemapUtils.isHostSkipped('notmedallia.eu', rules));
+  assert.ok(!SourcemapUtils.isHostSkipped('', rules));
+});
+
+test('skipRuleFor returns the rule that skips a host', () => {
+  const rules = new Set(['tracker.example.com', '*.medallia.eu']);
+  assert.strictEqual(SourcemapUtils.skipRuleFor('tracker.example.com', rules), 'tracker.example.com');
+  assert.strictEqual(SourcemapUtils.skipRuleFor('a.b.medallia.eu', rules), '*.medallia.eu');
+  assert.strictEqual(SourcemapUtils.skipRuleFor('example.org', rules), null);
+});
+
+test('siteOf finds the domain of a host', () => {
+  assert.strictEqual(SourcemapUtils.siteOf('a.b.example.com'), 'example.com');
+  assert.strictEqual(SourcemapUtils.siteOf('example.com'), 'example.com');
+  assert.strictEqual(SourcemapUtils.siteOf('x.y.co.uk'), 'y.co.uk');
+  assert.strictEqual(SourcemapUtils.siteOf('cdn.example.lt'), 'example.lt');
+  assert.strictEqual(SourcemapUtils.siteOf('192.168.0.1'), '');
+  assert.strictEqual(SourcemapUtils.siteOf('[::1]'), '');
+  assert.strictEqual(SourcemapUtils.siteOf(''), '');
+});
+
+test('findInlineDataUri picks the block with the matching map', () => {
+  const uriA = dataUri(MAP);
+  const uriB = dataUri({ ...MAP, sources: ['c.ts'] });
+  const blocks = [
+    { text: 'console.log(1);', type: 'script' },
+    { text: '//# sourceMappingURL=app.js.map', type: 'script' },
+    { text: 'a{}\n/*# sourceMappingURL=' + uriA + ' */', type: 'stylesheet' },
+    { text: 'x();\n//# sourceMappingURL=' + uriB, type: 'script' },
+  ];
+  assert.strictEqual(SourcemapDetector.findInlineDataUri(blocks, SourcemapUtils.hash(uriA)), uriA);
+  assert.strictEqual(SourcemapDetector.findInlineDataUri(blocks, SourcemapUtils.hash(uriB)), uriB);
+  assert.strictEqual(SourcemapDetector.findInlineDataUri(blocks, 'nope'), null);
+});

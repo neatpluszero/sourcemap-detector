@@ -104,8 +104,24 @@
     }
 
     // Only a prefix of inline maps is kept, so read the full map from the
-    // file that embeds it
-    if (entry.inline) throw new Error('Inline in the page, not available');
+    // page or file that embeds it
+    if (entry.inline) {
+      let response = null;
+      try {
+        response = await api.tabs.sendMessage(tabId, {
+          type: 'GET_INLINE_MAP',
+          hash: entry.dataUriHash,
+        });
+      } catch (e) {
+        // Tab closed, or a page open since before the extension was updated
+      }
+      if (!response || !response.rawUrl) {
+        throw new Error('Page changed, reload it to open this map');
+      }
+      const text = SourcemapUtils.decodeDataUri(response.rawUrl);
+      if (text === null) throw new Error('Could not decode the inline map');
+      return text;
+    }
     if (!SourcemapUtils.canFetch(entry.resourceUrl, pageUrl)) {
       throw new Error('Not fetched (private host)');
     }
@@ -290,7 +306,7 @@
   function renderDomain(parent, group, groupCount) {
     const id = 'd:' + group.host;
     const open = isOpen(id, group.firstParty || groupCount === 1);
-    const skipped = skippedHosts.has(group.host);
+    const skipped = SourcemapUtils.isHostSkipped(group.host, skippedHosts);
     const host = group.host || '(no host)';
 
     const { li, row } = makeRow({
@@ -487,7 +503,7 @@
   function includedEntries() {
     return data.entries.filter(
       (e) =>
-        !skippedHosts.has(SourcemapUtils.hostOf(e.resourceUrl)) &&
+        !SourcemapUtils.isHostSkipped(SourcemapUtils.hostOf(e.resourceUrl), skippedHosts) &&
         (!onlyExposed || e.status === 'exposed')
     );
   }

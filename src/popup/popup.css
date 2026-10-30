@@ -227,6 +227,37 @@ body {
   color: #a0aec0;
 }
 
+.chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.chip-site {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #cbd5e0;
+  border-radius: 50%;
+  background: #fff;
+  color: #718096;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chip-site:hover {
+  border-color: #a0aec0;
+}
+
+.chip-site--active {
+  border-style: dashed;
+  background: #edf2f7;
+  color: #2d3748;
+}
+
 /* Domain groups */
 .group__header {
   display: flex;

@@ -123,8 +123,28 @@
   const expandedOverrides = new Map();
 
   function toggleSkipped(host) {
-    if (skippedHosts.has(host)) skippedHosts.delete(host);
+    const rule = SourcemapUtils.skipRuleFor(host, skippedHosts);
+    if (rule) skippedHosts.delete(rule);
     else skippedHosts.add(host);
+    saveSettings();
+    renderResults(cachedData);
+  }
+
+  /**
+   * Skip or include a whole domain and everything under it.
+   */
+  function toggleSiteSkipped(site) {
+    const rule = '*.' + site;
+    if (skippedHosts.has(rule)) {
+      skippedHosts.delete(rule);
+    } else {
+      // Narrower rules would keep hosts skipped once this one is removed
+      const covering = new Set([rule]);
+      for (const other of skippedHosts) {
+        if (SourcemapUtils.isHostSkipped(other, covering)) skippedHosts.delete(other);
+      }
+      skippedHosts.add(rule);
+    }
     saveSettings();
     renderResults(cachedData);
   }
@@ -152,7 +172,7 @@
     caption.textContent = 'Click a domain to skip it:';
     el.domains.appendChild(caption);
     for (const group of groups) {
-      const skipped = skippedHosts.has(group.host);
+      const skipped = SourcemapUtils.isHostSkipped(group.host, skippedHosts);
       const exposed = countExposed(group.entries);
 
       const chip = document.createElement('button');
@@ -176,7 +196,24 @@
       chip.appendChild(name);
       chip.appendChild(count);
       chip.addEventListener('click', () => toggleSkipped(group.host));
-      el.domains.appendChild(chip);
+
+      const wrap = document.createElement('span');
+      wrap.className = 'chip-wrap';
+      wrap.appendChild(chip);
+
+      const site = SourcemapUtils.siteOf(group.host);
+      if (site && site !== group.host) {
+        const wide = skippedHosts.has('*.' + site);
+        const siteButton = document.createElement('button');
+        siteButton.className = 'chip-site' + (wide ? ' chip-site--active' : '');
+        siteButton.textContent = '*';
+        siteButton.setAttribute('aria-pressed', String(wide));
+        siteButton.title = (wide ? 'Include all of ' : 'Skip all of ') + site;
+        siteButton.setAttribute('aria-label', siteButton.title);
+        siteButton.addEventListener('click', () => toggleSiteSkipped(site));
+        wrap.appendChild(siteButton);
+      }
+      el.domains.appendChild(wrap);
     }
     el.domains.classList.toggle('hidden', groups.length < 2);
   }
@@ -260,7 +297,9 @@
     const groups = SourcemapUtils.groupByHost(data.entries, data.url);
     renderDomainBar(groups);
 
-    const shown = groups.filter((g) => !skippedHosts.has(g.host));
+    const shown = groups.filter(
+      (g) => !SourcemapUtils.isHostSkipped(g.host, skippedHosts)
+    );
     el.list.innerHTML = '';
     for (const group of shown) {
       el.list.appendChild(renderGroup(group, groups.length));
@@ -279,7 +318,8 @@
 
   // ── Skipped domains ──
 
-  // Hostnames left out of Copy and Export, kept across sites and sessions
+  // Hostnames and "*.domain" rules left out of Copy and Export, kept across
+  // sites and sessions
   let skippedHosts = new Set();
 
   async function loadSettings() {
@@ -312,7 +352,7 @@
   function getIncludedEntries(data) {
     return data.entries.filter(
       (e) =>
-        !skippedHosts.has(SourcemapUtils.hostOf(e.resourceUrl)) &&
+        !SourcemapUtils.isHostSkipped(SourcemapUtils.hostOf(e.resourceUrl), skippedHosts) &&
         (!el.onlyExposed.checked || e.status === 'exposed')
     );
   }
@@ -356,7 +396,7 @@
       ...new Set(
         data.entries
           .map((e) => SourcemapUtils.hostOf(e.resourceUrl))
-          .filter((host) => skippedHosts.has(host))
+          .filter((host) => SourcemapUtils.isHostSkipped(host, skippedHosts))
       ),
     ];
     const header =

@@ -369,6 +369,41 @@ const SourcemapUtils = {
   },
 
   /**
+   * The rule that skips a host: the host itself, or "*.parent" for the host
+   * or any domain above it. Returns null when nothing skips it.
+   * @param {string} host
+   * @param {Set<string>} rules
+   */
+  skipRuleFor(host, rules) {
+    if (!host) return null;
+    if (rules.has(host)) return host;
+    const labels = host.split('.');
+    for (let i = 0; i < labels.length; i++) {
+      const rule = '*.' + labels.slice(i).join('.');
+      if (rules.has(rule)) return rule;
+    }
+    return null;
+  },
+
+  isHostSkipped(host, rules) {
+    return SourcemapUtils.skipRuleFor(host, rules) !== null;
+  },
+
+  /**
+   * The domain a host belongs to: its last two labels, or three for names
+   * like example.co.uk. A guess without a public suffix list, so show the
+   * result to the user before acting on it. Returns '' for IP addresses.
+   */
+  siteOf(host) {
+    if (!host || host.includes(':') || /^[\d.]+$/.test(host)) return '';
+    if (host.startsWith('[')) return '';
+    const labels = host.split('.');
+    const [second, tld] = labels.slice(-2);
+    const count = tld && tld.length === 2 && second.length <= 3 ? 3 : 2;
+    return labels.slice(-count).join('.');
+  },
+
+  /**
    * Rough same-site check on the last two hostname labels, e.g.
    * cdn.example.com and www.example.com. Not public-suffix aware, so it is
    * only used for labelling.

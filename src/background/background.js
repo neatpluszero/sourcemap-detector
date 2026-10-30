@@ -50,6 +50,8 @@ const BackgroundController = {
     this.badgeApi = api[opts.badgeApi];
     // Keep a tab's results when it navigates, like DevTools' "Preserve log"
     this.preserveLog = false;
+    // Domains the user skipped in the popup, left out of the badge count
+    this.skippedHosts = new Set();
 
     // Every handler waits for this, so a restarted service worker never
     // answers or mutates state before session storage has been restored
@@ -112,6 +114,12 @@ const BackgroundController = {
       if (area === 'local' && changes.preserveLog) {
         this.preserveLog = changes.preserveLog.newValue === true;
       }
+      if (area === 'local' && changes.skippedHosts) {
+        this.skippedHosts = new Set(changes.skippedHosts.newValue || []);
+        this.ready.then(() => {
+          for (const tabId of Object.keys(tabData)) this.updateBadge(Number(tabId));
+        });
+      }
     });
 
     // Clean up on tab close. Bumping the generation (rather than deleting it)
@@ -132,8 +140,12 @@ const BackgroundController = {
    */
   async restore() {
     try {
-      const settings = await this.api.storage.local.get('preserveLog');
+      const settings = await this.api.storage.local.get([
+        'preserveLog',
+        'skippedHosts',
+      ]);
       this.preserveLog = settings.preserveLog === true;
+      this.skippedHosts = new Set(settings.skippedHosts || []);
     } catch (e) {}
 
     if (!this.opts.useSessionStorage || !this.api.storage?.session) return;
@@ -460,10 +472,16 @@ const BackgroundController = {
 
   /**
    * Red count of confirmed reachable maps; grey count of references when
-   * none are confirmed yet.
+   * none are confirmed yet. Skipped domains don't count.
    */
   updateBadge(tabId) {
-    const entries = tabData[tabId]?.entries || [];
+    const entries = (tabData[tabId]?.entries || []).filter(
+      (e) =>
+        !SourcemapUtils.isHostSkipped(
+          SourcemapUtils.hostOf(e.resourceUrl),
+          this.skippedHosts
+        )
+    );
     const exposed = entries.filter((e) => e.status === 'exposed').length;
     const count = exposed || entries.length;
 

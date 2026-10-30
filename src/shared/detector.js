@@ -81,6 +81,26 @@ const SourcemapDetector = {
     return null;
   },
 
+  /**
+   * Find the full data URI of an inline map among a page's inline blocks.
+   * @param {Array} blocks - Array of {text, type} objects
+   * @param {string} hash - The entry's dataUriHash
+   * @returns {string|null} The data URI, or null if no block has it
+   */
+  findInlineDataUri(blocks, hash) {
+    for (const { text, type } of blocks) {
+      const rawUrl = this.findDirectiveUrl(text, type);
+      if (
+        rawUrl !== null &&
+        SourcemapUtils.isDataUri(rawUrl) &&
+        SourcemapUtils.hash(rawUrl) === hash
+      ) {
+        return rawUrl;
+      }
+    }
+    return null;
+  },
+
   createCommentEntry(rawUrl, resourceUrl, type) {
     const isDataUri = SourcemapUtils.isDataUri(rawUrl);
     const entry = {

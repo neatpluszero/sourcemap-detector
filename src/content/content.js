@@ -56,36 +56,50 @@
   }
 
   /**
+   * Inline scripts and styles on the page, as { text, type }.
+   */
+  function inlineBlocks() {
+    return [
+      ...Array.from(document.querySelectorAll('script:not([src])'), (el) => ({
+        text: el.textContent,
+        type: 'script',
+      })),
+      ...Array.from(document.querySelectorAll('style'), (el) => ({
+        text: el.textContent,
+        type: 'stylesheet',
+      })),
+    ];
+  }
+
+  /**
    * Scan inline scripts and styles on the page.
    */
   function scanInline() {
     const allEntries = [];
 
-    const inlineBlocks = [
-      ...Array.from(document.querySelectorAll('script:not([src])'), (el) => [
-        el,
-        'script',
-      ]),
-      ...Array.from(document.querySelectorAll('style'), (el) => [
-        el,
-        'stylesheet',
-      ]),
-    ];
-
-    for (const [el, type] of inlineBlocks) {
-      if (el.textContent) {
+    for (const { text, type } of inlineBlocks()) {
+      if (text) {
         const entries = SourcemapDetector.scanContent(
-          el.textContent,
+          text,
           window.location.href,
           type
         );
-        // Inline blocks can't be fetched again later, e.g. by the explorer
+        // Inline blocks can't be fetched again later; the explorer asks this
+        // script for the full map instead
         for (const entry of entries) entry.inline = true;
         allEntries.push(...entries);
       }
     }
     return allEntries;
   }
+
+  // The explorer reads inline maps from the page, as only a prefix is stored
+  api.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type !== 'GET_INLINE_MAP') return;
+    sendResponse({
+      rawUrl: SourcemapDetector.findInlineDataUri(inlineBlocks(), message.hash),
+    });
+  });
 
   let observer = null;
 
